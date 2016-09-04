@@ -50,7 +50,7 @@ public class Cocos2dxTextureAtlasSlicer : EditorWindow
 
         if (File.Exists(plistPath))
         {
-            doIfPlistExists?.Invoke(plistPath);
+            if (doIfPlistExists != null) doIfPlistExists.Invoke(plistPath);
             return assetPath;
         }
         return null;

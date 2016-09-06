@@ -104,59 +104,36 @@ public class Cocos2dxTextureAtlasSlicer : EditorWindow
     private SubTexture[] subTextures;
     private int wantedWidth, wantedHeight;
 
-    private XmlNode getValueByKey(XmlNodeList parent, string key)
-    {
-        XmlNode rlt = null;
-        bool nextIsRlt = false;
-        foreach (XmlNode node in parent)
-        {
-            if (node.Name == "key" && node.InnerText == key)
-            {
-                nextIsRlt = true;
-            }
-            else if (nextIsRlt)
-            {
-                rlt = node;
-                break;
-            }
-        }
-        return rlt;
-    }
-
     private void ParseXML()
     {
         try
         {
             var document = new XmlDocument();
             document.LoadXml(plistContent);
-
-            var root = document.DocumentElement;
-            if (root == null)
-            {
-                return;
-            }
-
-            XmlNode frames = getValueByKey(root.ChildNodes[0].ChildNodes, "frames");
+            XmlNodeList frames = new PlistFinder(document.DocumentElement.ChildNodes[0]).FindValueByKey("frames").ChildNodes;
 
             ArrayList subTexs = new ArrayList();
-            string name = null;
-            foreach (XmlNode frame in frames)
+            for (int i = 0; i < frames.Count; i++)
             {
-                if (frame.Name == "key")
+                if (frames[i].Name.ToLower() == "key")
                 {
-                    name = frame.InnerText;
-                }
-                else
-                {
-                    XmlNodeList vs = frame.ChildNodes;
-                    string rect = getValueByKey(vs, "textureRect").InnerText;
+                    SubTexture subTex = new SubTexture();
+                    subTex.name = frames[i].InnerText;
+
+                    PlistFinder finder = new PlistFinder(frames[++i]);
+                    XmlNode rotatedNode = finder.FindValueByKey("textureRotated");
+                    rotatedNode = rotatedNode ?? finder.FindValueByKey("rotated");
+                    bool isRotated = (rotatedNode.Name.ToLower() == "true");
+
+                    XmlNode rectNode = finder.FindValueByKey("textureRect");
+                    rectNode = rectNode ?? finder.FindValueByKey("frame");
+                    string rect = rectNode.InnerText;
+
                     var ints = rect.Replace('{', ' ').Replace('}', ' ').Split(new char[] { ',' })
                                    .Select(num => Int32.Parse(num.Trim())).ToArray();
 
-                    SubTexture subTex = new SubTexture();
-                    subTex.name = name;
-                    subTex.width = ints[2];
-                    subTex.height = ints[3];
+                    subTex.width = isRotated ? ints[3] : ints[2];
+                    subTex.height = isRotated ? ints[2] : ints[3];
                     subTex.x = ints[0];
                     subTex.y = ints[1];
                     subTexs.Add(subTex);
@@ -344,5 +321,40 @@ public class Cocos2dxTextureAtlasSlicer : EditorWindow
         public int x;
         public int y;
         public string name;
+    }
+
+    private class PlistFinder
+    {
+        private Hashtable cachedMap = new Hashtable();
+        private int lastPosition = 0;
+        private XmlNode rootNode;
+
+        public PlistFinder(XmlNode rootNode)
+        {
+            this.rootNode = rootNode;
+        }
+
+        public XmlNode FindValueByKey(string key)
+        {
+            XmlNode rlt = cachedMap[key] as XmlNode;
+            if (rlt != null) return rlt;
+
+            XmlNodeList childs = rootNode.ChildNodes;
+            for (int i = lastPosition; i < childs.Count; i++)
+            {
+                XmlNode child = childs[i];
+                if (child.Name.ToLower() == "key")
+                {
+                    i++;
+                    cachedMap[child.InnerText] = childs[i];
+                    if (child.InnerText == key)
+                    {
+                        rlt = childs[i];
+                        break;
+                    }
+                }
+            }
+            return rlt;
+        }
     }
 }
